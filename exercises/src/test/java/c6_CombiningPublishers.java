@@ -1,5 +1,5 @@
-import org.junit.jupiter.api.*;
-import org.reactivestreams.Publisher;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import reactor.blockhound.BlockHound;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Hooks;
@@ -134,13 +134,10 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void need_for_speed() {
-        //todo: feel free to change code as you need
-        Flux<String> stonks = null;
-        getStocksGrpc();
-        getStocksRest();
+        Flux<String> stocks = Flux.firstWithValue(getStocksGrpc(), getStocksRest());
 
         //don't change below this line
-        StepVerifier.create(stonks)
+        StepVerifier.create(stocks)
                     .expectNextCount(5)
                     .verifyComplete();
     }
@@ -152,13 +149,10 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void plan_b() {
-        //todo: feel free to change code as you need
-        Flux<String> stonks = null;
-        getStocksLocalCache();
-        getStocksRest();
+        Flux<String> stocks = getStocksLocalCache().switchIfEmpty(getStocksRest());
 
         //don't change below this line
-        StepVerifier.create(stonks)
+        StepVerifier.create(stocks)
                     .expectNextCount(6)
                     .verifyComplete();
 
@@ -171,10 +165,21 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void mail_box_switcher() {
-        //todo: feel free to change code as you need
-        Flux<Message> myMail = null;
-        mailBoxPrimary();
-        mailBoxSecondary();
+        Flux<Message> myMail = mailBoxPrimary().switchOnFirst((signal, messageFlux) -> {
+            if(signal.hasValue()) {
+//                functional style
+//                return Optional.ofNullable(signal.get())
+//                        .filter(m -> m.metaData.contains("spam"))
+//                        .map(m -> mailBoxSecondary())
+//                        .orElse(messageFlux);
+
+                var m = signal.get();
+                if (m != null && m.metaData.contains("spam")) {
+                    return mailBoxSecondary();
+                }
+            }
+            return messageFlux;
+        });
 
         //don't change below this line
         StepVerifier.create(myMail)
@@ -194,11 +199,9 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void instant_search() {
-        //todo: feel free to change code as you need
         autoComplete(null);
         Flux<String> suggestions = userSearchInput()
-                //todo: use one operator only
-                ;
+                .switchMap(this::autoComplete);
 
         //don't change below this line
         StepVerifier.create(suggestions)
@@ -214,13 +217,10 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void prettify() {
-        //todo: feel free to change code as you need
-        //todo: use when,and,then...
-        Mono<Boolean> successful = null;
-
-        openFile();
-        writeToFile("0x3522285912341");
-        closeFile();
+        Mono<Boolean> successful = Mono.when(openFile()
+                .and(writeToFile("0x3522285912341"))
+                .and(closeFile()))
+                .then(Mono.just(true));
 
         //don't change below this line
         StepVerifier.create(successful)
@@ -237,10 +237,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void one_to_n() {
-        //todo: feel free to change code as you need
-        Flux<String> fileLines = null;
-        openFile();
-        readFile();
+        Flux<String> fileLines = openFile().thenMany(readFile());
 
         StepVerifier.create(fileLines)
                     .expectNext("0x1", "0x2", "0x3")
@@ -253,10 +250,9 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void acid_durability() {
-        //todo: feel free to change code as you need
-        Flux<String> committedTasksIds = null;
-        tasksToExecute();
-        commitTask(null);
+        Flux<String> committedTasksIds = tasksToExecute()
+                .flatMapSequential(stringMono -> stringMono)
+                .doOnNext(this::commitTask);
 
         //don't change below this line
         StepVerifier.create(committedTasksIds)
@@ -273,10 +269,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void major_merger() {
-        //todo: feel free to change code as you need
-        Flux<String> microsoftBlizzardCorp =
-                microsoftTitles();
-        blizzardTitles();
+        Flux<String> microsoftBlizzardCorp = microsoftTitles().mergeWith(blizzardTitles());
 
         //don't change below this line
         StepVerifier.create(microsoftBlizzardCorp)
@@ -299,10 +292,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void car_factory() {
-        //todo: feel free to change code as you need
-        Flux<Car> producedCars = null;
-        carChassisProducer();
-        carEngineProducer();
+        Flux<Car> producedCars = carChassisProducer().zipWith(carEngineProducer(), Car::new);
 
         //don't change below this line
         StepVerifier.create(producedCars)
@@ -323,9 +313,12 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
 
     //todo: implement this method based on instructions
     public Mono<String> chooseSource() {
-        sourceA(); //<- choose if sourceRef == "A"
-        sourceB(); //<- choose if sourceRef == "B"
-        return Mono.empty(); //otherwise, return empty
+        return Mono.defer(() -> {
+                    if (sourceRef.get().equals("A")) return sourceA(); //<- choose if sourceRef == "A"
+                    if (sourceRef.get().equals("B")) return sourceB(); //<- choose if sourceRef == "B"
+                    return Mono.empty(); //otherwise, return empty
+                }
+        );
     }
 
     @Test
@@ -345,7 +338,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
     }
 
     /**
-     * Sometimes you need to clean up after your self.
+     * Sometimes you need to clean up after yourself.
      * Open a connection to a streaming service and after all elements have been consumed,
      * close connection (invoke closeConnection()), without blocking.
      *
@@ -355,10 +348,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
     public void cleanup() {
         BlockHound.install(); //don't change this line, blocking = cheating!
 
-        //todo: feel free to change code as you need
-        Flux<String> stream = StreamingConnection.startStreaming()
-                                                 .flatMapMany(Function.identity());
-        StreamingConnection.closeConnection();
+        Flux<String> stream = Flux.usingWhen(StreamingConnection.startStreaming(), Function.identity(), tr -> StreamingConnection.closeConnection());
 
         //don't change below this line
         StepVerifier.create(stream)
